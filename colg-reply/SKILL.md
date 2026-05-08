@@ -1,9 +1,10 @@
 ---
 name: colg-reply
-description: COLG论坛自动回复帖子。使用 Hermes 浏览器工具自动化回复。
+description: 用户消息以"colg"开头时，COLG论坛自动回复帖子。使用 Hermes 浏览器工具自动化回复。
 triggers:
+  - colg 开头的问题
   - colg回复
-  - colg回复帖子
+  - 回复帖子
 ---
 
 # COLG论坛自动回复
