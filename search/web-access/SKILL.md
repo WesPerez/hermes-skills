@@ -1,6 +1,6 @@
 ---
 name: web-access
-description: 所有联网操作必须通过此技能处理，包括搜索、网页抓取、登录后操作等。三层通道调度：搜索API→网页抓取→CDP浏览器。参考 eze-is/web-access v2.5.0（6.1k stars）设计哲学。
+description: 所有联网操作必须通过此技能处理，包括搜索、网页抓取、登录后操作等。三层通道调度：搜索发现→内容抓取→CDP浏览器。参考 eze-is/web-access v2.5.0（6.1k stars）设计哲学。
 tags:
   - search
   - web
@@ -16,7 +16,35 @@ triggers:
 
 # Web Access — 联网搜索三层通道
 
-## 设计哲学
+## 优先级规则（重要！）
+
+所有联网操作按以下优先级执行，由轻到重：
+
+```
+Tier 1  搜索发现  →  浏览器打开 Google/百度搜索关键词
+Tier 2  内容抓取  →  Jina.ai (r.jina.ai/URL) 或 curl 抓取已知URL
+Tier 3  CDP浏览器  →  Edge CDP 9222 直接操作交互式页面
+```
+
+### 详细决策树
+
+| 场景 | 走哪层 | 具体方法 |
+|------|--------|---------|
+| 需要搜索某主题，无已知URL | Tier 1 → Tier 3 | 浏览器开 Google 搜索，看结果摘要 |
+| 有已知URL，抓取正文 | Tier 2 | `r.jina.ai/URL` 转 Markdown（20 RPM免费，省token） |
+| 需要页面原始HTML/meta | Tier 2 | `curl URL` |
+| 需要登录后内容 | Tier 3 | Edge CDP 直接访问（已登录） |
+| JS动态渲染页面 | Tier 3 | Edge CDP 导航+截图 |
+| 小红书/微博等反爬平台 | Tier 3 | 直接 CDP，跳过静态层 |
+| 用户指定 `ds/DS` 开头 | 走 ds-expert | DeepSeek 专家模式 |
+| 用户指定 `db` 开头 | 走 doubao-image-gen | 豆包图像生成 |
+| 用户指定 `colg` 开头 | 走 colg-hotlist | COLG热榜 |
+
+### 为什么不跳过步骤
+
+- Tier 1 和 Tier 2 比 CDP 浏览器 **快得多、省token**，不需要每次都开浏览器
+- 只有 Tier 1/2 拿不到内容才走 Tier 3（登录态、JS渲染、反爬）
+- **Jina.ai** 不需要 API Key，直接 `r.jina.ai/https://example.com` 即可，限 20 RPM
 
 **像人一样思考，兼顾高效与适应性。** 不依赖固化的步骤规划，而是带着目标进入，边看边判断，遇到阻碍就解决。
 
