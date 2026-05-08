@@ -69,6 +69,23 @@ read_when:
 - 豆包图片 URL 有防盗链，直接 curl 获取高清版会返回 HTML 错误页
 ```
 
+### Real-World Success Case: doubao-image-gen (2026-05-08)
+
+The reconstructed skill (`doubao-image-gen`) was tested end-to-end and worked:
+
+1. **Skill location**: Rebuilt as Hermes skill at `~/.hermes/skills/search/doubao-image-gen/`
+2. **Trigger**: `db` prefix (like `ds` for DeepSeek), e.g. `db DNF魔道学者表情包`
+3. **Tech stack**: Edge CDP 9222 → Doubao web → image generation
+4. **Key verified workflow**:
+   - Click "图像生成" button → set 比例 to 3:4 FIRST → type prompt → click send button (NOT Enter)
+   - Add 构图要求 to prompt: "画面上方留出约30像素的空间，主体放在中下部"
+   - Wait ~25s for 4 images (3:4 → 288×384 each)
+   - Download with `Referer: https://www.doubao.com/` header (antileech is weak)
+   - Crop top 23px watermark
+5. **Full test record**: See `search/doubao-image-gen/references/test-session-2026-05-08.md`
+
+**Key lesson**: The old OpenClaw skill said "按 Enter 发送" but modern Doubao **resets the page on Enter**. Must click the send button. Update the skill when reconstructing.
+
 ### When Recovery Fails
 
 If the skill was never documented in memory files, try:

@@ -1,10 +1,10 @@
 ---
 name: colg-hotlist
-description: COLG论坛社区热榜查看。使用 Hermes 内置浏览器工具 + agent-browser CDP 模式。
+description: 用户消息以"colg"开头时，查看 COLG 论坛社区热榜，提取热帖列表并截图发送。
 triggers:
-  - colg热榜
+  - colg 开头的问题
   - COLG热榜
-  - 查看热榜
+  - 论坛热榜
 ---
 
 # COLG论坛热榜

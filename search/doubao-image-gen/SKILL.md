@@ -9,6 +9,9 @@ tags:
   - edge-cdp
 triggers:
   - db 开头的问题
+related_skills:
+  - ds-expert
+  - remote-desktop-setup
 ---
 
 # 豆包图像生成（Doubao Image Generation）
@@ -155,3 +158,7 @@ cropped = img.crop((0, 23, img.width, img.height))
 4. **登录失效**：Cookie 约 7 天过期，需要用户通过 VNC（http://43.159.168.34/desktop/）重新登录一次。
 5. **浏览器挂掉**：CDP 9222 连不上时执行 `systemctl restart edge-browser.service`。
 6. **页面改版**：豆包经常更新 UI，所有 ref ID 每次加载可能不同。用 placeholder 文本（"描述你想要的图片"、"发消息..."）和按钮文本（"图像生成"、"比例"）作为识别依据。
+
+## 参考文件
+
+- `references/test-session-2026-05-08.md` — 完整实测记录，含 URL 格式、比例菜单项、COLG 参考帖子等细节
