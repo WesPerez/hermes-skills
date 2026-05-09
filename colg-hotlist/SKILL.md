@@ -120,3 +120,8 @@ Cookie 存储在 `cookies.json`，通过 `agent-browser cookies set` 命令注�
 - `agent-browser`（已配置 `--cdp 9222`）
 - Edge 浏览器（端口 9222）
 - 有效 COLG Cookie
+
+## 优先级说明
+
+本技能属于前缀触发（`colg`），优先级高于通用搜索技能 `web-access`。
+用户消息以 `colg` 开头时直接走本技能，不走通用联网搜索流程。

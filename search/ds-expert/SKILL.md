@@ -23,7 +23,31 @@ triggers:
 
 - **Edge 浏览器持久运行**：CDP 端口 **9222**（`edge-browser.service`），profile 在 `/root/.edge-profile`
 - **Hermes 已配置**：`browser.cdp_url: ws://127.0.0.1:9222`
-- **DeepSeek 已登录**：用户通过 NoVNC（http://43.159.168.34/desktop/）登录一次后，Cookie 持久化
+- **DeepSeek 已登录**：用户通过 NoVNC 登录一次后，Cookie 持久化
+
+## 标签页管理（每次操作前执行）
+
+每次执行前先检查标签页数量，避免浏览器标签页堆积：
+
+```python
+# 1. 获取当前所有标签页
+tabs = browser_cdp(method="Target.getTargets")
+targets = tabs.get("targetInfos", [])
+tab_count = len(targets)
+
+# 2. 如果标签页 > 10，全部关闭并重启浏览器
+if tab_count > 10:
+    for t in targets:
+        browser_cdp(method="Target.closeTarget", target_id=t["targetId"])
+    terminal(command="systemctl restart edge-browser.service")
+    time.sleep(5)  # 等待浏览器重启
+
+# 3. 创建一个新标签页用于本次操作
+new_tab = browser_cdp(method="Target.createTarget", params={"url": "about:blank"})
+new_target_id = new_tab["targetId"]
+```
+
+> ⚠️ 每次重新导航前都要检查 tab 数量。**不要复用旧的对话页面**，创建新标签页避免干扰历史对话。任务完成后关闭自己创建的标签页。
 
 ## 工作流程
 
@@ -80,6 +104,11 @@ browser_press(key="Enter")
 ## 参考文件
 
 - `references/js-extraction.md` — JS 提取与 HTML→Markdown 转换的完整代码
+
+## 优先级说明
+
+本技能属于前缀触发（`ds`/`DS`），优先级高于通用搜索技能 `web-access`。
+用户消息以 `ds` 开头时直接走本技能，不走 `web-access` 的三层通道调度。
 
 ## 依赖
 

@@ -38,6 +38,29 @@ related_skills:
 - **豆包已登录**：用户通过 NoVNC 登录一次后 Cookie 持久化
 - **图片处理工具**：Pillow（用于裁剪水印）
 
+## 标签页管理（每次操作前执行）
+
+每次执行前先检查标签页数量，避免浏览器标签页堆积：
+
+```python
+# 1. 获取当前所有标签页
+tabs = browser_cdp(method="Target.getTargets")
+targets = tabs.get("targetInfos", [])
+tab_count = len(targets)
+
+# 2. 如果标签页 > 10，全部关闭并重启浏览器
+if tab_count > 10:
+    for t in targets:
+        browser_cdp(method="Target.closeTarget", target_id=t["targetId"])
+    terminal(command="systemctl restart edge-browser.service")
+    time.sleep(5)
+
+# 3. 创建新标签页
+new_tab = browser_cdp(method="Target.createTarget", params={"url": "about:blank"})
+```
+
+> ⚠️ 每次操作都用新标签页，任务完成后关闭。不要复用旧标签页。
+
 ## 工作流程
 
 ### 步骤1：导航到豆包
@@ -168,4 +191,9 @@ cropped = img.crop((0, 23, img.width, img.height))
 
 ## 参考文件
 
-- `references/test-session-2026-05-08.md` — 完整实测记录，含 URL 格式、比例菜单项、COLG 参考帖子等细节
+- `references/test-session-2026-05-08.md` — 实测流程记录，包含 URL 格式、尺寸数据、COLG 参考帖子等细节
+
+## 优先级说明
+
+本技能属于前缀触发（`db`），优先级高于通用搜索技能 `web-access`。
+用户消息以 `db` 开头时直接走本技能生图，不走联网搜索流程。

@@ -106,3 +106,21 @@ requests.get(url, headers=headers)
 
 - `eze-is/web-access` GitHub 仓库（6.1k stars）：https://github.com/eze-is/web-access
 - 设计详解：https://www.eze.is/blog/web-access-skill
+
+## 用户偏好：行动优先（2026-05-08）
+
+- **先做，再解释**：搜索任务直接给出答案，不要在回答中详细说明搜索过程或用哪个技能。结论+一行理由就够。
+- **分析压缩**：涉及多方案对比时，先给最优结论+一句话理由，具体细节作为可选补充。
+- **用户不满意"沉默"**：长时间分析时先给阶段性回应（"查到了，正在整理"），不要闷头分析到完。
+
+## 已知陷阱
+
+1. **Reddit 拦 Jina.ai**：Jina 抓 Reddit 返回 403，需降级到 CDP 浏览器直接访问。
+2. **Jina 20 RPM 限额**：频繁抓取可能触发，间隔至少 3 秒。
+3. **Tier 1 就够时不要进 Tier 2**：Google 摘要内容足够回答时直接回，不需要额外抓取确认。
+4. **CDP 浏览器不是默认选项**：只有 Tier 1/2 都失败或需要登录态时再用。
+5. **前缀触发比通用搜索优先**：用户说 `ds`/`db`/`colg` 时走专门技能，不走 web-access。
+
+## 参考文件
+
+- `references/site-compatibility.md` — 各网站对 Jina.ai/curl/CDP 的兼容性备忘
