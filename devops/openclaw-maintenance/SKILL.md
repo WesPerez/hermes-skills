@@ -259,7 +259,14 @@ WorkBuddy and OpenClaw are related but different — see `references/workbuddy-v
 ## Common pitfalls
 
 - **`openclaw plugins install` creates `openclaw.json.bak`** — delete it after install, you don't need it.
-- **Broken symlinks in `~/.openclaw/skills/`** cause "Skipping escaped skill path" log noise but don't break functionality. Clean them: `find ~/.openclaw/skills/ -type l ! -exec test -e {} \; -delete`.
+- **Broken symlinks in `~/.openclaw/skills/` cause "Skipping escaped skill path" log noise but don't break functionality. Clean them: `find ~/.openclaw/skills/ -type l ! -exec test -e {} \\; -delete`.**
+- **Escaping symlinks** (point outside the configured root) generate the same log noise but are NOT caught by the broken-symlink check. Find and remove them:
+  ```bash
+  for f in ~/.openclaw/skills/*; do
+    [ -L "$f" ] && realpath "$f" | grep -q "^$HOME/.openclaw/skills/" || echo "REMOVE: $f"
+  done
+  ```
+  The log pattern is: `Skipping escaped skill path outside its configured root: source=openclaw-managed reason=symlink-escape requested=... resolved=...`
 - **`memory-lancedb-pro` plugin loaded from workspace** — if `plugins.load.paths` points to `~/.openclaw/workspace/plugins/memory-lancedb-pro`, do NOT delete that directory during workspace cleanup.
 - **Cleaning `~/.openclaw/npm/` kills QQ Bot** — `@openclaw/qqbot` is an external npm plugin installed to `~/.openclaw/npm/node_modules/@openclaw/qqbot/`. Never delete `npm/` directory. If gone, reinstall: `openclaw plugins install @openclaw/qqbot`.
 - **`workspace/plugins/memory-lancedb-pro` may have nested `.git`** — delete it if broken: `rm -rf ~/.openclaw/workspace/plugins/memory-lancedb-pro/.git`.

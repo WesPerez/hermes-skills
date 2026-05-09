@@ -93,17 +93,14 @@ browser_cdp(method="Runtime.evaluate", params={
 }, target_id=ds_tab_id)
 ```
 
-### 步骤3：输入问题并发送
+### 步骤3：输入问题（nativeSetter + dispatchEvent）
+
+React 受控组件，必须用 native value setter + dispatchEvent('input')：
 
 ```python
+q = "你的问题文本"
 browser_cdp(method="Runtime.evaluate", params={
-    "expression": """(() => {
-        const all = document.querySelectorAll('*');
-        for(const el of all) {
-            if(el.textContent === '专家模式') { el.click(); return 'clicked'; }
-        }
-        return 'not found';
-    })()""",
+    "expression": f"(()=>{{const ta=document.querySelector('textarea');const ns=Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype,'value').set;ns.call(ta,`{q}`);ta.dispatchEvent(new Event('input',{{bubbles:true}}));return 1}})()",
     "returnByValue": True
 }, target_id=ds_tab_id)
 ```
@@ -133,28 +130,34 @@ for i in range(15):
 **首选简单方法**（适合绝大多数查询，速度快）：
 ```python
 r = browser_cdp(method="Runtime.evaluate", params={
-    "expression": "Array.from(document.querySelectorAll('[class*=\"ds-markdown\"]')).map(el=>el.innerText).join('\\n\\n')",
+    "expression": "Array.from(document.querySelectorAll('[class*=\"ds-markdown\"]')).map(el=>el.innerText).filter(t=>t.length>50).slice(-1)[0]",
     "returnByValue": True
 }, target_id=ds_tab_id)
 answer = r["result"]["result"]["value"]
-# 清理引用标记（可选）：answer = re.sub(r'-\d+', '', answer)
+# 清理引用标记：answer = re.sub(r'-\d+', '', answer)
 ```
 
 **备选完整方法**（需要保留表格/代码块格式时）：
-使用参考文件 `references/js-extraction.md` 中的完整 HTML→Markdown 转换代码。通常在答案包含复杂表格时必须使用此方法。
+使用参考文件 `references/js-extraction.md` 中的完整 HTML→Markdown 转换代码。
 
-### 步骤8：返回结果
+### 步骤6：返回结果给用户
+
+**⚠️ 关键规则：必须先发答案，再关标签页！**
+
+```python
+# 1. 用引用块包装答案，让用户一眼看出是 DeepSeek 原文
+send_message(message=f"> {answer}")
+
+# 2. 确认用户收到后，再关闭标签页
+browser_cdp(method="Target.closeTarget", params={"targetId": ds_tab_id})
+```
 
 直接将 DeepSeek 的答案正文返回给用户：
 - **不要截取**、不要概括、不要自己总结
 - **不要包含**思考过程、侧边栏、搜索到的网页列表、页面元素
 - **保留格式**：加粗（`**text**`）、表格（`|` 分隔）、列表、代码块
-- **即使答案很短（1-3句话），也要用引用块或明显格式展示，让用户一眼看出是 DeepSeek 原文**
-- **用引用块包装答案**，如 `> ...`，让回答来源一目了然
-
-### 步骤6：先展示答案，再关闭标签页
-
-**⚠️ 关键规则**：必须先把答案发给用户，确认用户收到后，再关闭标签页。不要先关标签页再给答案，用户会以为你没去查。
+- **即使答案很短（1-3句话），也要用引用块格式展示**，让用户一眼看出是 DeepSeek 原文
+- **引用块**：`> 答案内容`
 
 ## 陷阱与注意事项（必读）
 
@@ -166,9 +169,9 @@ answer = r["result"]["result"]["value"]
 6. **清理引用标记**：DeepSeek 回复中的 `-1`、`-3`、`-37` 等引用标记需要去除，只保留正文。
 7. **检测是否已登录**：页面显示用户名（如"彭伟"）表示已登录；如果显示登录页面，需要通知用户通过 VNC 重新登录。
 8. **Edge 可能挂掉**：如果 CDP 连不上（9222 端口无响应），先检查 `systemctl status edge-browser.service` 并重启。
+9. **先展示答案再关标签页**：必须先把答案（用引用块格式）展示给用户，再 `Target.closeTarget`。用户没看到答案就关 tab 会让用户以为没去查。
 10. **React 受控输入**：设置 textarea 的 value 必须用 native value setter + dispatchEvent('input')，直接赋值不触发 React 更新。
 11. **Enter 发送**：DeepSeek 网页版用 Enter 发送消息，不要找发送按钮。使用 KeyboardEvent 模拟。
-12. **先展示答案再关标签页**：必须先把答案（用引用块格式）展示给用户，确认收到后再 `Target.closeTarget`。用户没看到答案就关 tab 会让用户以为没去查。
 
 ## 参考文件
 
@@ -225,7 +228,8 @@ r = browser_cdp(method="Runtime.evaluate", params={
 }, target_id=TAB)
 answer = r["result"]["result"]["value"]
 
-# ===== 7. 关闭标签页 =====
+# ===== 7. **先发答案给用户，再关标签页** =====
+send_message(message=f"> {answer}")
 browser_cdp(method="Target.closeTarget", params={"targetId": TAB})
 ```
 

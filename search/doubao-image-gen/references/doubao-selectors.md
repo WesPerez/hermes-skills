@@ -19,7 +19,12 @@
 ```python
 # === 准备 ===
 tab = browser_cdp(method="Target.createTarget", params={"url": "https://www.doubao.com/chat/"})["targetId"]
-terminal(command="sleep 5")
+
+# === 等待页面加载（轮询，最多 6s） ===
+for i in range(12):
+    r = browser_cdp(method="Runtime.evaluate", params={"expression": "!!document.body && document.body.innerText.length > 100", "returnByValue": True}, target_id=tab)
+    if r["result"]["result"]["value"]: break
+    terminal(command="sleep 0.5")
 
 # === 检测登录 ===
 logged = browser_cdp(method="Runtime.evaluate", params={
@@ -33,20 +38,24 @@ browser_cdp(method="Runtime.evaluate", params={
     "expression": "(()=>{const all=document.querySelectorAll('*');for(const el of all){if(el.textContent&&el.textContent.trim()==='图像生成'){let c=el;while(c&&c.tagName!=='BUTTON'&&(!c.onclick&&getComputedStyle(c).cursor!=='pointer'))c=c.parentElement;if(c.tagName==='BODY')c=el;c.click();return 1}}return 0})()",
     "returnByValue": True
 }, target_id=tab)
-terminal(command="sleep 3")
+# 等待图像生成界面（轮询检测输入框，最多 4s）
+for i in range(8):
+    r = browser_cdp(method="Runtime.evaluate", params={"expression": "Array.from(document.querySelectorAll('textarea,input,[contenteditable]')).some(el=>(el.placeholder||'').includes('描述')||(el.placeholder||'').includes('图片'))", "returnByValue": True}, target_id=tab)
+    if r["result"]["result"]["value"]: break
+    terminal(command="sleep 0.5")
 
 # === 设置比例 3:4 ===
 browser_cdp(method="Runtime.evaluate", params={
     "expression": "(()=>{const all=document.querySelectorAll('*');for(const el of all){if(el.textContent&&el.textContent.trim()==='比例'){let c=el;while(c&&c.tagName!=='BUTTON'&&(!c.onclick&&getComputedStyle(c).cursor!=='pointer'))c=c.parentElement;if(c.tagName==='BODY')c=el;c.click();return 1}}return 0})()",
     "returnByValue": True
 }, target_id=tab)
-terminal(command="sleep 2")
+# 等待比例面板弹出（轮询，最多 4s）
+for i in range(8):
+    r = browser_cdp(method="Runtime.evaluate", params={"expression": "Array.from(document.querySelectorAll('*')).some(el=>el.textContent&&el.textContent.trim()==='3:4'&&getComputedStyle(el).cursor==='pointer'&&el.offsetParent!==null)", "returnByValue": True}, target_id=tab)
+    if r["result"]["result"]["value"]: break
+    terminal(command="sleep 0.5")
 
-browser_cdp(method="Runtime.evaluate", params={
-    "expression": "(()=>{const all=document.querySelectorAll('*');for(const el of all){if(el.textContent&&el.textContent.trim()==='3:4'){let c=el;while(c&&getComputedStyle(c).cursor!=='pointer')c=c.parentElement;c.click();return 1}}return 0})()",
-    "returnByValue": True
-}, target_id=tab)
-terminal(command="sleep 2")
+# 选 3:4（无需等待）
 
 # === 输入提示词 ===
 prompt = "用户描述，画面上方留出约30像素的空间，主体放在中下部"
@@ -85,16 +94,16 @@ urls = json.loads(r["result"]["result"]["value"])
 # ⚠️ 先发图再关标签页
 ```
 
-## 时间参考
+## 时间参考（优化后）
 
-| 阶段 | 耗时 |
-|------|------|
-| 页面加载 | ~5s |
-| 切换图像生成 | ~3s |
-| 设置比例 | ~4s |
-| 输入+发送 | ~2s |
-| 等待生成 | ~25-30s |
-| **合计** | **~35-40s** |
+| 阶段 | 旧方案 | 新方案 |
+|------|-------|-------|
+| 页面加载 | 5s 盲等 | ~2-3s 轮询 |
+| 切换图像生成 | 3s 盲等 | ~1-2s 轮询 |
+| 设置比例 | 4s 盲等 | ~1-2s 轮询 |
+| 输入+发送 | ~2s | ~1s |
+| 等待生成 | ~25-30s | ~20-25s（不变，实际生成时间） |
+| **合计** | **~35-40s** | **~25-32s** |
 
 ## 已知问题
 

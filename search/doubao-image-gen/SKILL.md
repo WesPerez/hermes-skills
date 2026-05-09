@@ -77,10 +77,13 @@ browser_cdp(method="Target.closeTarget", params={"targetId": db_tab_id})
 
 **注意：不要使用 browser_navigate / browser_click / browser_type / browser_press / browser_snapshot / browser_console 等 Hermes 浏览器工具——它们操作的是默认标签页，不是 CDP 创建的新标签页。**
 
-### 步骤1：等待页面加载
+### 步骤1：等待页面加载（轮询，最多 6s）
 
 ```python
-terminal(command="sleep 5")
+for i in range(12):
+    r = browser_cdp(method="Runtime.evaluate", params={"expression": "document.body && document.body.innerText.length > 100", "returnByValue": True}, target_id=db_tab_id)
+    if r["result"]["result"]["value"]: break
+    terminal(command="sleep 0.5")
 ```
 
 检测是否已登录：检查页面是否包含用户名。
@@ -117,7 +120,11 @@ browser_cdp(method="Runtime.evaluate", params={
     })()""",
     "returnByValue": True
 }, target_id=db_tab_id)
-terminal(command="sleep 3")  # 等待界面切换
+# 等待界面切换（轮询检测图像生成输入框，最多 4s）
+for i in range(8):
+    r = browser_cdp(method="Runtime.evaluate", params={"expression": "Array.from(document.querySelectorAll('textarea,input,[contenteditable]')).some(el=>(el.placeholder||'').includes('描述')||(el.placeholder||'').includes('图片'))", "returnByValue": True}, target_id=db_tab_id)
+    if r["result"]["result"]["value"]: break
+    terminal(command="sleep 0.5")
 ```
 
 ### 步骤3：设置比例
@@ -143,9 +150,12 @@ browser_cdp(method="Runtime.evaluate", params={
     })()""",
     "returnByValue": True
 }, target_id=db_tab_id)
-terminal(command="sleep 2")
-
-# 在弹出选项中选择 3:4
+# 等待比例面板弹出（轮询检测 3:4 选项，最多 4s）
+for i in range(8):
+    r = browser_cdp(method="Runtime.evaluate", params={"expression": "Array.from(document.querySelectorAll('*')).some(el=>el.textContent&&el.textContent.trim()==='3:4'&&getComputedStyle(el).cursor==='pointer'&&el.offsetParent!==null)", "returnByValue": True}, target_id=db_tab_id)
+    if r["result"]["result"]["value"]: break
+    terminal(command="sleep 0.5")
+```
 browser_cdp(method="Runtime.evaluate", params={
     "expression": """(() => {
         const all = document.querySelectorAll('*');
@@ -162,9 +172,8 @@ browser_cdp(method="Runtime.evaluate", params={
         return 'not found';
     })()""",
     "returnByValue": True
-}, target_id=db_tab_id)
-terminal(command="sleep 2")
-```
+, target_id=db_tab_id)
+` ``
 
 | 比例 | 适用场景 |
 |------|---------|
