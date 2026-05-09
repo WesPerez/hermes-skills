@@ -60,23 +60,111 @@ result = browser_cdp(method="Target.createTarget", params={"url": "https://www.d
 db_tab_id = result["targetId"]
 ```
 
-> ⚠️ 每次操作都用新标签页，任务完成后关闭。不要创建 about:blank 后再调用 browser_navigate，因为 browser_navigate 不受 target_id 控制，会导航到旧标签页。
+> ⚠️ 每次操作都用新标签页，任务完成后关闭。
 >
-> 后续所有操作使用 browser_cdp + target_id 在指定标签页内执行。
+> **不要使用 browser_navigate / browser_click / browser_type / browser_press / browser_snapshot / browser_console 等 Hermes 浏览器工具**——它们操作的是默认标签页，不是 CDP 创建的新标签页。
+>
+> 后续所有操作必须使用 `browser_cdp(method="Runtime.evaluate", ..., target_id=db_tab_id)`。
 
-## 工作流程
+### 关闭标签页
+```python
+browser_cdp(method="Target.closeTarget", params={"targetId": db_tab_id})
+```
 
-### 步骤1：导航到豆包（已在创建标签页时完成）
+## 工作流程（全 CDP 方式）
 
-检测是否已登录（右上角显示用户名表示已登录）。如果显示登录页面，通知用户通过 VNC 登录。
+所有操作使用 `browser_cdp(method="Runtime.evaluate", ..., target_id=db_tab_id)` 执行 JavaScript。
+
+**注意：不要使用 browser_navigate / browser_click / browser_type / browser_press / browser_snapshot / browser_console 等 Hermes 浏览器工具——它们操作的是默认标签页，不是 CDP 创建的新标签页。**
+
+### 步骤1：等待页面加载
+
+```python
+terminal(command="sleep 5")
+```
+
+检测是否已登录：检查页面是否包含用户名。
+```python
+check = browser_cdp(method="Runtime.evaluate", params={
+    "expression": "document.body.innerText.includes('登录') ? 'need_login' : 'logged_in'",
+    "returnByValue": True
+}, target_id=db_tab_id)
+```
+
+如果显示登录页面，通知用户通过 VNC 登录。
 
 ### 步骤2：进入图像生成模式
 
-在页面底部工具栏找到\"图像生成\"按钮并点击。点击后会出现图像生成专属界面，包含专属输入框（placeholder=\"描述你想要的图片\"）。
+在页面底部工具栏找到"图像生成"按钮并点击：
+
+```python
+browser_cdp(method="Runtime.evaluate", params={
+    "expression": """(() => {
+        const all = document.querySelectorAll('*');
+        for(const el of all) {
+            if(el.textContent && el.textContent.trim() === '图像生成') {
+                // 找可点击的父元素
+                let clickable = el;
+                while(clickable && clickable.tagName !== 'BUTTON' && (!clickable.onclick && window.getComputedStyle(clickable).cursor !== 'pointer' && clickable.tagName !== 'A')) {
+                    clickable = clickable.parentElement;
+                }
+                if(clickable.tagName === 'BODY') clickable = el;
+                clickable.click();
+                return 'clicked 图像生成';
+            }
+        }
+        return 'not found';
+    })()""",
+    "returnByValue": True
+}, target_id=db_tab_id)
+terminal(command="sleep 3")  # 等待界面切换
+```
 
 ### 步骤3：设置比例
 
-在图像生成工具栏中找到\"比例\"按钮并点击，从弹出选项中选择 3:4（竖版）。这一步必须在输入提示词之前完成，否则比例设置不生效。
+在图像生成工具栏中找到"比例"按钮并点击：
+
+```python
+browser_cdp(method="Runtime.evaluate", params={
+    "expression": """(() => {
+        const all = document.querySelectorAll('*');
+        for(const el of all) {
+            if(el.textContent && el.textContent.trim() === '比例') {
+                let clickable = el;
+                while(clickable && clickable.tagName !== 'BUTTON' && (!clickable.onclick && window.getComputedStyle(clickable).cursor !== 'pointer' && clickable.tagName !== 'A')) {
+                    clickable = clickable.parentElement;
+                }
+                if(clickable.tagName === 'BODY') clickable = el;
+                clickable.click();
+                return 'clicked 比例';
+            }
+        }
+        return 'not found';
+    })()""",
+    "returnByValue": True
+}, target_id=db_tab_id)
+terminal(command="sleep 2")
+
+# 在弹出选项中选择 3:4
+browser_cdp(method="Runtime.evaluate", params={
+    "expression": """(() => {
+        const all = document.querySelectorAll('*');
+        for(const el of all) {
+            if(el.textContent && el.textContent.trim() === '3:4') {
+                let clickable = el;
+                while(clickable && window.getComputedStyle(clickable).cursor !== 'pointer') {
+                    clickable = clickable.parentElement;
+                }
+                clickable.click();
+                return 'selected 3:4';
+            }
+        }
+        return 'not found';
+    })()""",
+    "returnByValue": True
+}, target_id=db_tab_id)
+terminal(command="sleep 2")
+```
 
 | 比例 | 适用场景 |
 |------|---------|
@@ -86,48 +174,105 @@ db_tab_id = result["targetId"]
 
 ### 步骤4：输入提示词
 
+找到图像生成输入框（placeholder 为"描述你想要的图片"），用 native value setter 输入：
+
 ```python
-browser_type(ref="<输入框ref>", text="<提示词>")
+prompt = "用户提示词" + "，画面上方留出约30像素的空间，主体放在中下部"
+browser_cdp(method="Runtime.evaluate", params={
+    "expression": f"""(() => {{
+        const inputs = document.querySelectorAll('textarea, input, [contenteditable]');
+        for(const el of inputs) {{
+            const ph = el.placeholder || el.getAttribute('aria-label') || '';
+            if(ph.includes('描述') || ph.includes('图片') || ph.includes('输入')) {{
+                if(el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {{
+                    const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set ||
+                                         Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+                    if(nativeSetter) {{
+                        nativeSetter.call(el, {json.dumps(prompt)});
+                        el.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                    }}
+                }} else {{
+                    el.innerText = {json.dumps(prompt)};
+                }}
+                return 'typed ' + {len(prompt)} + ' chars';
+            }}
+        }}
+        return 'no matching input';
+    }})()""",
+    "returnByValue": True
+}, target_id=db_tab_id)
 ```
 
 #### 提示词构图要求（必加）
-在提示词末尾加入以下构图要求，避免主体被裁切：
+在提示词末尾追加：
 ```
 画面上方留出约30像素的空间，主体放在中下部
 ```
 
-#### 多风格提示词指南
-| 风格 | 关键词 |
-|------|--------|
-| 写实/摄影 | 摄影级、写实风格、电影感、8K 细节 |
-| 二次元/动漫 | 二次元、动漫风、赛博朋克、厚涂 |
-| 插画/手绘 | 插画风格、水彩风、手绘感 |
-| 国风 | 水墨画、国风、工笔画 |
-| Q版/可爱 | Q版、可爱风格、两头身 |
-| 极简 | 极简风格、扁平化、干净线条 |
-
 ### 步骤5：点击发送按钮
 
-输入文字后，在输入框右侧找发送按钮（通常是一个箭头图标），用 `browser_click` 点击。
+**不要按 Enter**（实测按 Enter 会导致页面重置回到首页），必须找发送按钮点击：
 
-> ⚠️ **不要按 Enter**：实测按 Enter 会导致页面重置回到首页，必须点击发送按钮。
+```python
+browser_cdp(method="Runtime.evaluate", params={
+    "expression": """(() => {
+        // 找发送按钮：通常是一个箭头/发送图标，在输入框附近
+        const all = document.querySelectorAll('button, [role="button"], svg, [class*="send"], [class*="submit"]');
+        for(const el of all) {
+            const text = el.textContent.trim();
+            const cls = el.className || '';
+            const aria = el.getAttribute('aria-label') || '';
+            if(text === '发送' || text === '生成' || text.includes('发送') || text.includes('生成') ||
+               cls.includes('send') || cls.includes('submit') || cls.includes('生成') ||
+               aria.includes('发送') || aria.includes('生成')) {
+                el.click();
+                return 'clicked';
+            }
+        }
+        // 找不到文本，尝试找最后一个箭头图标
+        const svgs = document.querySelectorAll('svg');
+        for(const svg of svgs) {
+            if(svg.getAttribute('name') === 'Send' || svg.getAttribute('data-icon') === 'send') {
+                svg.closest('button, [role="button"], div')?.click();
+                return 'clicked svg';
+            }
+        }
+        return 'button not found, will try alternatives';
+    })()""",
+    "returnByValue": True
+}, target_id=db_tab_id)
+```
+
+如果以上找不到，尝试用 vision 截图找到发送按钮坐标后点击（仅在兜底时使用）。
 
 ### 步骤6：等待生成
 
-生成状态消息会显示类似\"正在为您生成...~\"。豆包生成时间：第一张约 **15-20 秒**，全部 4 张约 **25 秒**。
+生成状态会显示"正在为您生成..."。豆包生成时间：第一张约 **15-20 秒**，全部 4 张约 **25 秒**。
 
 轮询检测策略（每 5 秒检查一次，最多 12 次）：
+
 ```python
-browser_console(expression="document.querySelectorAll('img[src*=\"rc_gen_image\"]').length")
+for i in range(12):
+    terminal(command="sleep 5")
+    check = browser_cdp(method="Runtime.evaluate", params={
+        "expression": "document.querySelectorAll('img[src*=\"rc_gen_image\"]').length",
+        "returnByValue": True
+    }, target_id=db_tab_id)
+    img_count = check["result"]["value"]
+    if img_count >= 4:
+        break
 ```
-当出现 4 张图片时表示生成完成。
 
 ### 步骤7：获取图片 URL
 
 ```python
-urls = browser_console(expression="""JSON.stringify(Array.from(document.querySelectorAll('img'))
-  .filter(img => img.src.includes('rc_gen_image'))
-  .map(img => img.src))""")
+result = browser_cdp(method="Runtime.evaluate", params={
+    "expression": """JSON.stringify(Array.from(document.querySelectorAll('img'))
+        .filter(img => img.src && img.src.includes('rc_gen_image'))
+        .map(img => img.src))""",
+    "returnByValue": True
+}, target_id=db_tab_id)
+urls = json.loads(result["result"]["value"])
 ```
 
 返回 4 个 byteimg URL，格式如：
@@ -138,6 +283,7 @@ https://p5-flow-imagex-sign.byteimg.com/.../rc_gen_image/<hash>.jpeg~tplv-<size>
 ### 步骤8：下载图片
 
 豆包防盗链不严格，加 Referer 头即可：
+
 ```python
 import requests
 headers = {
@@ -149,6 +295,7 @@ for i, url in enumerate(urls):
     with open(f'doubao_{i+1}.jpg', 'wb') as f:
         f.write(r.content)
 ```
+
 每张约 115-190KB（视比例不同：3:4 约 115-124KB / 288×384；方形约 170-190KB / 384×384）。
 
 ### 步骤9：裁剪水印并发送
@@ -163,6 +310,12 @@ for i in range(1, 5):
 ```
 
 4 张图依次发送给用户。
+
+### 步骤10：关闭标签页
+
+```python
+browser_cdp(method="Target.closeTarget", params={"targetId": db_tab_id})
+```
 
 ## 水印裁剪说明
 
