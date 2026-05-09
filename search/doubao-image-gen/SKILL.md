@@ -311,10 +311,13 @@ for i in range(1, 5):
 
 4 张图依次发送给用户。
 
-### 步骤10：关闭标签页
+### 步骤10：待用户确认收到后关闭标签页
+
+**⚠️ 关键规则**：先把图片发给用户，等用户确认收到（或给出回复）后，再关闭标签页。不要先关标签页再发图。
 
 ```python
-browser_cdp(method="Target.closeTarget", params={"targetId": db_tab_id})
+# 等用户确认后再关闭
+# browser_cdp(method="Target.closeTarget", params={"targetId": db_tab_id})
 ```
 
 ## 水印裁剪说明
@@ -339,11 +342,13 @@ cropped = img.crop((0, 23, img.width, img.height))
 3. **提示词构图要求自动加入**：每次生图都要在提示词末尾加上「画面上方留出约30像素的空间，主体放在中下部」，确保主体不被裁切。
 4. **登录失效**：Cookie 约 7 天过期，需要用户通过 VNC（http://43.159.168.34/desktop/）重新登录一次。
 5. **浏览器挂掉**：CDP 9222 连不上时执行 `systemctl restart edge-browser.service`。
-6. **页面改版**：豆包经常更新 UI，所有 ref ID 每次加载可能不同。用 placeholder 文本（"描述你想要的图片"、"发消息..."）和按钮文本（"图像生成"、"比例"）作为识别依据。
+6. **页面改版**：豆包经常更新 UI，所有 ref ID 每次加载可能不同。用 placeholder 文本（描述你想要的图片、发消息...）和按钮文本（图像生成、比例）作为识别依据。
+7. **先发图再关闭标签页**：必须先把图片发送给用户，确认收到后，再 Target.closeTarget。不要先关 tab 再发图。
 
 ## 参考文件
 
 - `references/test-session-2026-05-08.md` — 实测流程记录，包含 URL 格式、尺寸数据、COLG 参考帖子等细节
+- `references/doubao-selectors.md` — 豆包 CDP 操作速查表（已验证的选择器 + 完整操作模板）
 
 ## 优先级说明
 

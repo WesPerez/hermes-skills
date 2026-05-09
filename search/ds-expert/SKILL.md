@@ -71,34 +71,29 @@ browser_cdp(method="Target.closeTarget", params={"targetId": ds_tab_id})
 
 去掉 `ds` 前缀，获取纯净问题文本。
 
-### 步骤2：等待页面加载并点击"开启新对话"
+### 步骤2：等待页面加载并切专家模式
+
+创建标签页后，轮询检测 textarea 就绪（每 0.5s 检查，最多 6s）：
 
 ```python
-# 检查页面是否已加载
-check = browser_cdp(method="Runtime.evaluate", params={
-    "expression": "document.querySelector('textarea') !== null",
-    "returnByValue": True
-}, target_id=ds_tab_id)
+for i in range(12):
+    r = browser_cdp(method="Runtime.evaluate", params={"expression": "!!document.querySelector('textarea')", "returnByValue": True}, target_id=ds_tab_id)
+    if r["result"]["result"]["value"]: break
+    terminal(command="sleep 0.5")
+```
 
-# 点击"开启新对话"按钮（用文本搜索可点击父元素）
+**跳过「开启新对话」**：新标签页直接就是空白页，无需点击。
+
+切换到专家模式：
+
+```python
 browser_cdp(method="Runtime.evaluate", params={
-    "expression": """(() => {
-        const it = document.createNodeIterator(document.body, 4);
-        let n;
-        while(n = it.nextNode()) {
-            if(n.nodeValue && n.nodeValue.includes('开启新对话')) {
-                let el = n.parentElement;
-                while(el && window.getComputedStyle(el).cursor !== 'pointer') el = el.parentElement;
-                if(el) { el.click(); return 'clicked'; }
-            }
-        }
-        return 'not found';
-    })()""",
+    "expression": "(()=>{const all=document.querySelectorAll('*');for(const el of all){if(el.textContent==='专家模式'){el.click();return 1}}return 0})()",
     "returnByValue": True
 }, target_id=ds_tab_id)
 ```
 
-### 步骤3：切换到专家模式
+### 步骤3：输入问题并发送
 
 ```python
 browser_cdp(method="Runtime.evaluate", params={
@@ -113,67 +108,40 @@ browser_cdp(method="Runtime.evaluate", params={
 }, target_id=ds_tab_id)
 ```
 
-### 步骤4：输入问题
+### 步骤4：发送消息并轮询等待回复
 
-用 native value setter 设置 textarea 值（React 受控组件需要触发 input 事件）：
+发送后立即开始轮询检测 `.ds-markdown` 元素（每 2s 检查一次）：
 
 ```python
-question = "你的问题文本"
+# 用 KeyboardEvent 模拟回车发送
 browser_cdp(method="Runtime.evaluate", params={
-    "expression": f"""(() => {{
-        const ta = document.querySelector('textarea');
-        if(!ta) return 'no textarea';
-        const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
-        nativeSetter.call(ta, {json.dumps(question)});
-        ta.dispatchEvent(new Event('input', {{ bubbles: true }}));
-        return 'OK';
-    }})()""",
+    "expression": "(()=>{const ta=document.querySelector('textarea');ta.focus();ta.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',code:'Enter',bubbles:true,cancelable:true}));ta.dispatchEvent(new KeyboardEvent('keyup',{key:'Enter',code:'Enter',bubbles:true,cancelable:true}));return 1})()",
     "returnByValue": True
 }, target_id=ds_tab_id)
+
+# 轮询检测回复，每 2s 检查
+for i in range(15):
+    r = browser_cdp(method="Runtime.evaluate", params={"expression": "document.querySelectorAll('[class*=\"ds-markdown\"]').length", "returnByValue": True}, target_id=ds_tab_id)
+    if r["result"]["result"]["value"] >= 3:
+        terminal(command="sleep 3")
+        break
+    terminal(command="sleep 2")
 ```
 
-### 步骤5：发送消息
+### 步骤5：提取答案
 
-用 KeyboardEvent 模拟回车：
-
+**首选简单方法**（适合绝大多数查询，速度快）：
 ```python
-browser_cdp(method="Runtime.evaluate", params={
-    "expression": """(() => {
-        const ta = document.querySelector('textarea');
-        ta.focus();
-        ta.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', code:'Enter', bubbles: true, cancelable: true}));
-        ta.dispatchEvent(new KeyboardEvent('keyup', {key:'Enter', code:'Enter', bubbles: true, cancelable: true}));
-        return 'sent';
-    })()""",
+r = browser_cdp(method="Runtime.evaluate", params={
+    "expression": "Array.from(document.querySelectorAll('[class*=\"ds-markdown\"]')).map(el=>el.innerText).join('\\n\\n')",
     "returnByValue": True
 }, target_id=ds_tab_id)
+answer = r["result"]["result"]["value"]
+# 清理引用标记（可选）：answer = re.sub(r'-\d+', '', answer)
 ```
 
-### 步骤6：轮询等待回复
-
-等待 3-5 秒后开始轮询，直到 `.ds-markdown` 元素出现：
-
-```python
-terminal(command="sleep 8")
-check = browser_cdp(method="Runtime.evaluate", params={
-    "expression": "document.querySelectorAll('[class*=\"ds-markdown\"]').length > 3",
-    "returnByValue": True
-}, target_id=ds_tab_id)
-```
-
-每次轮询间隔 5-8 秒，最多 6 次。
-
-### 步骤7：提取答案
-
-使用参考文件 `references/js-extraction.md` 中的完整 JS 提取代码，通过 `browser_cdp` 执行：
-
-```python
-result = browser_cdp(method="Runtime.evaluate", params={
-    "expression": "<js-extraction.md 中的完整 JS 代码>",
-    "returnByValue": True
-}, target_id=ds_tab_id)
-answer = result["result"]["value"]
-```
+**备选完整方法**（需要保留表格/代码块格式时）：
+使用参考文件 `references/js-extraction.md` 中的完整 HTML→Markdown 转换代码。通常在答案包含复杂表格时必须使用此方法。
 
 ### 步骤8：返回结果
 
@@ -181,6 +149,12 @@ answer = result["result"]["value"]
 - **不要截取**、不要概括、不要自己总结
 - **不要包含**思考过程、侧边栏、搜索到的网页列表、页面元素
 - **保留格式**：加粗（`**text**`）、表格（`|` 分隔）、列表、代码块
+- **即使答案很短（1-3句话），也要用引用块或明显格式展示，让用户一眼看出是 DeepSeek 原文**
+- **用引用块包装答案**，如 `> ...`，让回答来源一目了然
+
+### 步骤6：先展示答案，再关闭标签页
+
+**⚠️ 关键规则**：必须先把答案发给用户，确认用户收到后，再关闭标签页。不要先关标签页再给答案，用户会以为你没去查。
 
 ## 陷阱与注意事项（必读）
 
@@ -192,8 +166,9 @@ answer = result["result"]["value"]
 6. **清理引用标记**：DeepSeek 回复中的 `-1`、`-3`、`-37` 等引用标记需要去除，只保留正文。
 7. **检测是否已登录**：页面显示用户名（如"彭伟"）表示已登录；如果显示登录页面，需要通知用户通过 VNC 重新登录。
 8. **Edge 可能挂掉**：如果 CDP 连不上（9222 端口无响应），先检查 `systemctl status edge-browser.service` 并重启。
-9. **React 受控输入**：设置 textarea 的 value 必须用 native value setter + dispatchEvent('input')，直接赋值不触发 React 更新。
-10. **Enter 发送**：DeepSeek 网页版用 Enter 发送消息，不要找发送按钮。使用 KeyboardEvent 模拟。
+10. **React 受控输入**：设置 textarea 的 value 必须用 native value setter + dispatchEvent('input')，直接赋值不触发 React 更新。
+11. **Enter 发送**：DeepSeek 网页版用 Enter 发送消息，不要找发送按钮。使用 KeyboardEvent 模拟。
+12. **先展示答案再关标签页**：必须先把答案（用引用块格式）展示给用户，确认收到后再 `Target.closeTarget`。用户没看到答案就关 tab 会让用户以为没去查。
 
 ## 参考文件
 
@@ -202,77 +177,67 @@ answer = result["result"]["value"]
 
 ## 已知高效操作（已验证，无需重新探索）
 
-每次 ds 查询统一使用以下 CDP 操作流程，不要反复摸索元素选择器。
+每次 ds 查询统一使用以下优化流程。**关键原则：轮询代替盲等，跳过不必要步骤。**
 
-### 完整操作代码段
+### 完整操作代码段（优化版）
 
 ```python
 # ===== 0. 创建新标签页（直接指定 URL） =====
-tab_result = browser_cdp(method="Target.createTarget", params={"url": "https://chat.deepseek.com/"})
-TAB = tab_result["targetId"]
+TAB = browser_cdp(method="Target.createTarget", params={"url": "https://chat.deepseek.com/"})["targetId"]
 
-# 等待加载
-terminal(command="sleep 5")
+# ===== 1. 等待页面加载（轮询，每 0.5s 检查一次，最多 6s） =====
+for i in range(12):
+    r = browser_cdp(method="Runtime.evaluate", params={"expression": "!!document.querySelector('textarea')", "returnByValue": True}, target_id=TAB)
+    if r["result"]["result"]["value"]: break
+    terminal(command="sleep 0.5")
 
-# ===== 1. 开启新对话（避免复用旧会话状态） =====
+# ===== 2. 切专家模式（新标签页就是空白页，无需先点「开启新对话」） =====
 browser_cdp(method="Runtime.evaluate", params={
-    "expression": """(() => { const it = document.createNodeIterator(document.body, 4); let n; while(n = it.nextNode()) { if(n.nodeValue.includes('开启新对话')) { const el = n.parentElement; while(el && window.getComputedStyle(el).cursor !== 'pointer') el = el.parentElement; if(el) { el.click(); return 'ok'; } } } return 'not found'; })()""",
+    "expression": "(()=>{const all=document.querySelectorAll('*');for(const el of all){if(el.textContent==='专家模式'){el.click();return 1}}return 0})()",
     "returnByValue": True
 }, target_id=TAB)
 
-terminal(command="sleep 2")
-
-# ===== 2. 切换到专家模式 =====
+# ===== 3. 输入问题（nativeSetter + dispatchEvent） =====
+q = "你的问题"
 browser_cdp(method="Runtime.evaluate", params={
-    "expression": """(() => { const all = document.querySelectorAll('*'); for(const el of all) { if(el.textContent === '专家模式') { el.click(); return 'ok'; } } return 'not found'; })()""",
+    "expression": f"(()=>{{const ta=document.querySelector('textarea');const ns=Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype,'value').set;ns.call(ta,`{q}`);ta.dispatchEvent(new Event('input',{{bubbles:true}}));return 1}})()",
     "returnByValue": True
 }, target_id=TAB)
 
-terminal(command="sleep 1")
-
-# ===== 3. 输入问题（必须用 nativeSetter + dispatchEvent） =====
-QUESTION = "你的问题"
+# ===== 4. 发送（KeyboardEvent Enter） =====
 browser_cdp(method="Runtime.evaluate", params={
-    "expression": f"""(function() {{
-        const ta = document.querySelector('textarea');
-        if(!ta) return 'no textarea';
-        const ns = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
-        ns.call(ta, `{QUESTION}`);
-        ta.dispatchEvent(new Event('input', {{ bubbles: true }}));
-        return 'ok ' + ta.value.length;
-    }})()""",
+    "expression": "(()=>{const ta=document.querySelector('textarea');ta.focus();ta.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',code:'Enter',bubbles:true,cancelable:true}));ta.dispatchEvent(new KeyboardEvent('keyup',{key:'Enter',code:'Enter',bubbles:true,cancelable:true}));return 1})()",
     "returnByValue": True
 }, target_id=TAB)
 
-# ===== 4. 按 Enter 发送 =====
-browser_cdp(method="Runtime.evaluate", params={
-    "expression": """const ta = document.querySelector('textarea'); ta.focus(); ta.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', code:'Enter', bubbles: true, cancelable: true})); ta.dispatchEvent(new KeyboardEvent('keyup', {key:'Enter', code:'Enter', bubbles: true, cancelable: true})); 'sent'""",
-    "returnByValue": True
-}, target_id=TAB)
-
-# ===== 5. 等待回复完成（轮询检测） =====
-# 检测标志：textarea 内容被清空 或 出现 ds-markdown 元素
-for i in range(6):  # 最多等 30s
-    terminal(command="sleep 5")
-    done = browser_cdp(method="Runtime.evaluate", params={
-        "expression": "document.querySelectorAll('[class*=\"ds-markdown\"]').length",
-        "returnByValue": True
-    }, target_id=TAB)
-    if done["result"]["result"]["value"] >= 3:  # 出现3+个markdown块表示回复生成中
+# ===== 5. 等待回复（轮询 ds-markdown，每 2s 检查，最多 30s） =====
+for i in range(15):
+    r = browser_cdp(method="Runtime.evaluate", params={"expression": "document.querySelectorAll('[class*=\"ds-markdown\"]').length", "returnByValue": True}, target_id=TAB)
+    if r["result"]["result"]["value"] >= 3:
+        terminal(command="sleep 3")  # 再等 3s 收尾
         break
+    terminal(command="sleep 2")
 
-# 再等一会让完整回复生成
-terminal(command="sleep 10")
-
-# ===== 6. 提取答案 =====
-answer = browser_cdp(method="Runtime.evaluate", params={
-    "expression": """(() => { const items = document.querySelectorAll('[class*="ds-markdown"]'); return Array.from(items).map(el => el.innerText).join('\\n\\n').substring(0, 10000); })()""",
+# ===== 6. 提取答案（取最后一个长文本块） =====
+r = browser_cdp(method="Runtime.evaluate", params={
+    "expression": "Array.from(document.querySelectorAll('[class*=\"ds-markdown\"]')).map(el=>el.innerText).filter(t=>t.length>50).slice(-1)[0]",
     "returnByValue": True
 }, target_id=TAB)
+answer = r["result"]["result"]["value"]
 
 # ===== 7. 关闭标签页 =====
 browser_cdp(method="Target.closeTarget", params={"targetId": TAB})
 ```
+
+### 优化前后对比
+
+| 阶段 | 旧方案（盲等） | 新方案（轮询） |
+|------|--------------|--------------|
+| 等待页面加载 | sleep 5 | 轮询 0.5s×最多12次 → ~2-3s |
+| 开启新对话 | sleep 2 | **跳过**（新标签页已是空白页） |
+| 切专家模式 | sleep 1 | **无需等待** |
+| 等待回复 | sleep 12+10=22s | 轮询 2s×最多15次 → ~8-15s |
+| **总耗时** | **~30s** | **~10-18s** |
 
 ### 关键技术点
 
@@ -283,14 +248,8 @@ browser_cdp(method="Target.closeTarget", params={"targetId": TAB})
 | 输入文字 | nativeSetter + dispatchEvent('input') | React 受控组件，直接设 value 不触发更新 |
 | 发送消息 | dispatchEvent KeyboardEvent Enter | 比点按钮可靠 |
 | 读页面 | `Runtime.evaluate` + target_id | browser_snapshot 不认 CDP 创建的 tab |
-
-### 提速提示
-
-- Page load: 5s 足够（CDP 直连比 browser_navigate 快）
-- 新对话: 2s
-- 专家模式: 1s
-- 生成等待: 简单问题 ~10s，复杂问题 ~20-25s（含深度思考）
-- **总时间通常在 20-40s 内完成一次完整查询**
+| 页面加载检测 | 轮询 `document.querySelector('textarea')` | 替代 blind sleep，提前感知就绪 |
+| 回复检测 | 轮询 `[class*="ds-markdown"]` 数量 | 一旦 >=3 说明回复生成中，补 3s 收尾 |
 
 ## 优先级说明
 
