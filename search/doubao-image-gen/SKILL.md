@@ -55,19 +55,18 @@ if tab_count > 10:
     terminal(command="systemctl restart edge-browser.service")
     time.sleep(5)
 
-# 3. 创建新标签页
-new_tab = browser_cdp(method="Target.createTarget", params={"url": "about:blank"})
+# 3. 创建新标签页并直接导航到豆包（不要创建空白页再 browser_navigate）
+result = browser_cdp(method="Target.createTarget", params={"url": "https://www.doubao.com/chat/"})
+db_tab_id = result["targetId"]
 ```
 
-> ⚠️ 每次操作都用新标签页，任务完成后关闭。不要复用旧标签页。
+> ⚠️ 每次操作都用新标签页，任务完成后关闭。不要创建 about:blank 后再调用 browser_navigate，因为 browser_navigate 不受 target_id 控制，会导航到旧标签页。
+>
+> 后续所有操作使用 browser_cdp + target_id 在指定标签页内执行。
 
 ## 工作流程
 
-### 步骤1：导航到豆包
-
-```python
-browser_navigate(url="https://www.doubao.com/chat/")
-```
+### 步骤1：导航到豆包（已在创建标签页时完成）
 
 检测是否已登录（右上角显示用户名表示已登录）。如果显示登录页面，通知用户通过 VNC 登录。
 

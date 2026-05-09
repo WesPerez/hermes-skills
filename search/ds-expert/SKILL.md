@@ -41,24 +41,42 @@ if tab_count > 10:
         browser_cdp(method="Target.closeTarget", target_id=t["targetId"])
     terminal(command="systemctl restart edge-browser.service")
     time.sleep(5)  # 等待浏览器重启
-
-# 3. 创建一个新标签页用于本次操作
-new_tab = browser_cdp(method="Target.createTarget", params={"url": "about:blank"})
-new_target_id = new_tab["targetId"]
 ```
 
-> ⚠️ 每次重新导航前都要检查 tab 数量。**不要复用旧的对话页面**，创建新标签页避免干扰历史对话。任务完成后关闭自己创建的标签页。
+### 关键规则：创建新标签页 + 直接在 URL 中导航
+
+**不要复用旧的对话页面**，每次创建一个新标签页，并且**直接在 Target.createTarget 中指定 URL**，不要事后调用 browser_navigate：
+
+```python
+# ✅ 正确做法：创建标签页时直接传入目标 URL
+result = browser_cdp(method="Target.createTarget", params={"url": "https://chat.deepseek.com/"})
+ds_tab_id = result["targetId"]
+
+# 后续所有操作使用 browser_cdp + target_id 在指定标签页内执行
+# 例如等待加载:
+terminal(command="sleep 5")
+# 检查页面:
+check = browser_cdp(method="Runtime.evaluate", params={"expression": "document.body.innerText.substring(0, 2000)"}, target_id=ds_tab_id)
+```
+
+> ⚠️ **不要**创建 about:blank 后再 browser_navigate，因为 browser_navigate 不受 target_id 控制，会错误地导航到旧标签页。
+
+任务完成后关闭自己创建的标签页：
+```python
+browser_cdp(method="Target.closeTarget", target_id=ds_tab_id)
+```
 
 ## 工作流程
 
 ### 步骤1：提取问题
 去掉 `ds` 前缀，获取纯净问题文本。
 
-### 步骤2：导航到 DeepSeek
+### 步骤2：创建新标签页并导航到 DeepSeek
 ```python
-browser_navigate(url="https://chat.deepseek.com/")
+result = browser_cdp(method="Target.createTarget", params={"url": "https://chat.deepseek.com/"})
+ds_tab_id = result["targetId"]
 ```
-先开启一个新对话（点击"开启新对话"按钮）。
+先等待页面加载完成，再开启一个新对话（点击"开启新对话"按钮）。
 
 ### 步骤3：切换到专家模式
 在 radiogroup 中找到"专家模式"并选中：
