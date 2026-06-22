@@ -40,7 +40,6 @@
 - nginx: 80(HTTP) / 8888(HTTPS)
 - NoVNC桌面: http://43.159.168.34/desktop/ (admin/admin, VNC密码hermes123)
 - Edge CDP: ws://127.0.0.1:9222 (持久化profile)
-- 化学游戏: http://43.159.168.34/chemistry-game.html
 
 ## 📁 系统文件路径
 - Hermes配置: `~/.hermes/config.yaml`

@@ -1,6 +1,6 @@
 # 🦞 Hermes 技能仓库
 
-用户自定义 Hermes Agent 技能集合，共 **117** 个技能。
+用户自定义 Hermes Agent 技能集合，共 **115** 个技能。
 每个技能是一个 SKILL.md 文件，按分类存放，用 Git 做版本控制。
 
 ## 搜索前缀触发
@@ -19,7 +19,6 @@
 - **debug-js-syntax-errors** — 调试单文件 HTML 应用中 JavaScript 语法错误，特别是中文嵌套引号问题。
 - **gateway-message-delivery-debug** — 诊断 Hermes Gateway 消息截断、静默投递失败和各平台 API 限制（微信、Telegram、Discord 等）。
 - **hermes-reasoning-deepseek** — 诊断并修复 Hermes Agent 中 DeepSeek 思考/推理配置不生效的问题。
-- **html-game-timer-debug** — 调试单文件 HTML 游戏中计时器回调在提交答案后仍触发，导致错误计数膨胀的问题。
 - **openclaw-model-fix** — 修复 OpenClaw 中 Unknown model 错误，通过添加缺失的模型 ID 到 providers 配置中。
 
 ## ⚙️ 运维
@@ -32,7 +31,6 @@
 
 ## 🎮 娱乐
 
-- **chemistry-game-debug** — 化学游戏 chemistry-game.html 调试与修复手册。
 - **find-nearby** — 使用 OpenStreetMap 查找附近地点（餐厅、咖啡厅、药店等），无需 API Key。
 
 ## 🔍 搜索
