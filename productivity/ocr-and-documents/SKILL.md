@@ -1,12 +1,13 @@
 ---
 name: ocr-and-documents
-description: "Extract text from PDFs/scans (pymupdf, marker-pdf)."
+description: "Extract text from PDFs/scans and edit PDF text (pymupdf, marker-pdf, nano-pdf)."
 version: 2.3.0
 author: Hermes Agent
 license: MIT
+platforms: [linux, macos, windows]
 metadata:
   hermes:
-    tags: [PDF, Documents, Research, Arxiv, Text-Extraction, OCR]
+    tags: [PDF, Documents, Research, Arxiv, Text-Extraction, OCR, PDF-Editing]
     related_skills: [powerpoint]
 ---
 
@@ -160,11 +161,24 @@ No extra dependencies needed — pymupdf covers split, merge, search, and text e
 
 ---
 
+---
+
+## PDF Text Editing (nano-pdf)
+
+After extracting text, you may need to edit the PDF itself — fix a typo, update a date, change a title. Use `nano-pdf` for natural-language PDF text changes on specific pages.
+
+See `references/pdf-editing-with-nano-pdf.md` for setup, usage, and examples.
+
+```bash
+nano-pdf edit report.pdf 3 "Update the date from January to February 2026"
+```
+
 ## Notes
 
 - `web_extract` is always first choice for URLs
 - pymupdf is the safe default — instant, no models, works everywhere
 - marker-pdf is for OCR, scanned docs, equations, complex layouts — install only when needed
+- `nano-pdf` is for text editing of existing PDFs (typos, dates, titles, names) — install separately: `uv pip install nano-pdf`
 - Both helper scripts accept `--help` for full usage
 - marker-pdf downloads ~2.5GB of models to `~/.cache/huggingface/` on first use
 - For Word docs: `pip install python-docx` (better than OCR — parses actual structure)
