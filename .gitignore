@@ -1,3 +1,7 @@
 .curator_state
 .usage.json
 .bundled_manifest
+.usage.json.lock
+.archive/
+.curator_backups/
+.hub/
