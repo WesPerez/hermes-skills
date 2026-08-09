@@ -79,6 +79,8 @@ The full response should cover:
 
 ## Pitfalls
 
+- **Config changes → show unified diff, not summary tables.** When modifying config files, the user wants to see exactly what changed in diff format (`-` old / `+` new). Tables and prose summaries are not a substitute — they obscure what actually happened.
+- **Version/model claims → read the actual file first.** Never trust system prompt metadata or session-creation labels for current state. Always `grep` or `read_file` the live config before stating what model/version is active.
 - **Don't expose raw API keys/secrets** unless user explicitly asks. Use truncated forms like `tvly-d...NiMx`.
 - **Keep the template in `~/.hermes/skills/devops/system-config-inventory/references/`**, not in `~/.hermes/` directly. Skills backup with git; loose files don't.
 - **When migrating from OpenClaw → Hermes**, the init response format should mirror what OpenClaw returned, so the user's muscle memory ("发init就返回完整配置") works identically.

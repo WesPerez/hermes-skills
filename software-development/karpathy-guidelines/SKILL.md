@@ -69,3 +69,12 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 ---
 
 **These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
+
+## User-Specific Application
+
+- Verify live files or runtime state before claiming a model, version, or configuration value.
+- Show configuration changes as a unified diff when the exact lines matter.
+- Stay within the requested scope; report unrelated findings without acting on them.
+- Keep updates concise and focused on decisions, evidence, and results.
+- Ask one targeted question only when a missing choice materially changes the outcome.
+- Complete reversible work independently; confirm destructive or externally visible actions.
